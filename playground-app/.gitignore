@@ -1,0 +1,5 @@
+# Large compiler binary – copy from ../build/capylang.wasm when needed
+public/capylang.wasm
+spike/spike-browser-out.wasm
+node_modules/
+dist/

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Capylang Spike – Browser Compile</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+    pre { background: #111; color: #eee; padding: 1rem; overflow: auto; white-space: pre-wrap; }
+    button { font-size: 1rem; padding: 0.5rem 1rem; }
+    .ok { color: #0a0; }
+    .fail { color: #c00; }
+    .meta { color: #666; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>Phase 0 Spike: Browser Compile</h1>
+  <p class="meta">Loads <code>public/capylang.wasm</code>, compiles a tiny Capylang program via easywasm + MemoryFS.</p>
+  <button id="run">Compile sample</button>
+  <p id="status">Idle.</p>
+  <h2>Log</h2>
+  <pre id="log"></pre>
+
+  <script type="module">
+    import { compileCapylang, SAMPLE_SOURCE } from "./compile_spike.js";
+
+    const statusEl = document.getElementById("status");
+    const logEl = document.getElementById("log");
+    const btn = document.getElementById("run");
+
+    function log(msg) {
+      logEl.textContent += msg + "\n";
+    }
+
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      logEl.textContent = "";
+      statusEl.textContent = "Loading compiler + compiling…";
+      statusEl.className = "";
+      const t0 = performance.now();
+      try {
+        log("--- source ---\n" + SAMPLE_SOURCE);
+        const result = await compileCapylang({
+          compilerUrl: "../public/capylang.wasm",
+        });
+        const ms = Math.round(performance.now() - t0);
+        log(`exitCode=${result.exitCode}`);
+        log(`stdout:\n${result.stdout || "(empty)"}`);
+        log(`stderr:\n${result.stderr || "(empty)"}`);
+        if (result.ok) {
+          const magic = [...result.wasm.slice(0, 4)].map((b) => b.toString(16).padStart(2, "0")).join(" ");
+          log(`out.wasm size=${result.wasm.byteLength} magic=${magic} (expect 00 61 73 6d)`);
+          statusEl.textContent = `OK in ${ms} ms – ${result.wasm.byteLength} bytes`;
+          statusEl.className = "ok";
+        } else {
+          statusEl.textContent = `FAILED in ${ms} ms (exit ${result.exitCode})`;
+          statusEl.className = "fail";
+        }
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "ERROR";
+        statusEl.className = "fail";
+        log(String(err && err.stack ? err.stack : err));
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
