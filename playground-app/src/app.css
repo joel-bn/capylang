@@ -1,0 +1,10 @@
+/* Global kep minimal, layout styles live in App.svelte */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}

@@ -1,37 +1,48 @@
 # Capylang Playground App
 
-New browser playground (Svelte planned). Phase 0 is a compile spike only.
+Client-only Capylang playground (Svelte 5 + Vite).
 
-## Phase 0 – Browser / Node compile spike
-
-Proves that `capylang.wasm` can compile Capylang source via WASI in JS (easywasm + in-memory FS).
-
-### Prerequisites
-
-- Copy/build `build/capylang.wasm` into `public/capylang.wasm` (already done for the spike if present).
-- Node.js 18+ (for headless check) or any static file server (for the HTML UI).
-
-### Headless test
+## Quick start
 
 ```bash
-node playground-app/spike/node_spike.mjs
+cd playground-app
+npm install
+npm run dev
 ```
 
-Expect: `OK … magic=0061736d` and `spike/spike-browser-out.wasm`.
+Open the URL Vite prints (http://localhost:5173/).
 
-### Browser UI
+**Phase 1:** Editor (CodeMirror) + Console layout + Run stub. Compile/run not wired yet.
 
-From the **repository root** (so URLs resolve):
+For the Phase 0 compile spike (headless):
+
+```bash
+# ensure public/capylang.wasm exists (copy from ../build/capylang.wasm)
+npm run spike
+```
+
+Browser spike UI (static server from repo root):
 
 ```bash
 python -m http.server 8765
+# http://localhost:8765/playground-app/spike/
 ```
 
-Open: http://localhost:8765/playground-app/spike/
+## Layout
 
-Click **Compile sample**.
+| Path | Role |
+|---|---|
+| `src/App.svelte` | Layout, Run button, state |
+| `src/lib/Editor.svelte` | CodeMirror 6 editor |
+| `src/lib/Console.svelte` | Compiler vs Runtime panes |
+| `src/lib/sample.capy.js` | Default Capylang sample |
+| `spike/` | Phase 0 browser/Node compile proof |
+| `public/capylang.wasm` | Compiler asset (gitignored; copy from `build/`) |
 
-### Layout
+## Phases
 
-- `public/capylang.wasm` – compiler asset
-- `spike/` – MemoryFS, easywasm copy, compile helper, HTML UI, Node runner
+0. Spike: `capylang.wasm` compiles in JS: done  
+1. Svelte skeleton + CodeMirror: current  
+2. Compile Worker  
+3. easywasm CLI run  
+4. Polish + docs  

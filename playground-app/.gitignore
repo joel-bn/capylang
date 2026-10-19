@@ -3,3 +3,11 @@ public/capylang.wasm
 spike/spike-browser-out.wasm
 node_modules/
 dist/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Editor
+.DS_Store
