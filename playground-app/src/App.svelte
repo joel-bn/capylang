@@ -2,19 +2,51 @@
   import Editor from "./lib/Editor.svelte";
   import Console from "./lib/Console.svelte";
   import { SAMPLE_CAPY } from "./lib/sample.capy.js";
+  import { compileSource } from "./lib/compile/compileClient.js";
 
   let source = $state(SAMPLE_CAPY);
   let compilerLog = $state("");
   let runtimeLog = $state("");
-  let status = $state("Ready (compile/run not wired yet, Phase 2/3).");
+  let status = $state("Ready");
+  let busy = $state(false);
+  /** @type {Uint8Array | null} */
+  let lastWasm = $state(null);
 
-  function onRun() {
-    compilerLog =
-      "[Phase 1] Run clicked.\nCompile Worker comes in Phase 2.\nSource length: " +
-      source.length +
-      " chars.";
-    runtimeLog = "(waiting for compile)";
-    status = "Stub run, no compile yet.";
+  async function onRun() {
+    if (busy) return;
+    busy = true;
+    lastWasm = null;
+    runtimeLog = "(Phase 3: run not wired yet)";
+    compilerLog = "Compiling…\n(first run loads capylang.wasm, may take a few seconds)";
+    status = "Compiling…";
+
+    try {
+      const result = await compileSource(source);
+      const parts = [
+        `exitCode=${result.exitCode}`,
+        `time=${result.ms} ms`,
+        result.stdout ? `stdout:\n${result.stdout}` : "stdout: (empty)",
+        result.stderr ? `stderr:\n${result.stderr}` : "stderr: (empty)",
+      ];
+
+      if (result.ok && result.wasm) {
+        lastWasm = result.wasm;
+        const magic = [...result.wasm.slice(0, 4)]
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join(" ");
+        parts.push(`out.wasm size=${result.wasm.byteLength} magic=${magic}`);
+        compilerLog = parts.join("\n\n");
+        status = `Compile OK (${result.wasm.byteLength} bytes, ${result.ms} ms)`;
+      } else {
+        compilerLog = parts.join("\n\n");
+        status = `Compile failed (exit ${result.exitCode})`;
+      }
+    } catch (err) {
+      compilerLog = String(err && err.stack ? err.stack : err);
+      status = "Compile error";
+    } finally {
+      busy = false;
+    }
   }
 </script>
 
@@ -23,7 +55,9 @@
     <h1>Capy Playground</h1>
     <p class="tagline">Client-only Capylang</p>
     <div class="actions">
-      <button type="button" onclick={onRun}>Run</button>
+      <button type="button" onclick={onRun} disabled={busy}>
+        {busy ? "Compiling…" : "Run"}
+      </button>
       <span class="status">{status}</span>
     </div>
   </header>
@@ -86,8 +120,13 @@
     cursor: pointer;
   }
 
-  button:hover {
+  button:hover:not(:disabled) {
     background: #444;
+  }
+
+  button:disabled {
+    opacity: 0.6;
+    cursor: wait;
   }
 
   .status {

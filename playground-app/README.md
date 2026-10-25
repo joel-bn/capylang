@@ -12,7 +12,7 @@ npm run dev
 
 Open the URL Vite prints (http://localhost:5173/).
 
-**Phase 1:** Editor (CodeMirror) + Console layout + Run stub. Compile/run not wired yet.
+**Phase 2:** Run compiles Capylang in a Web Worker. Runtime execution comes in Phase 3.
 
 For the Phase 0 compile spike (headless):
 
@@ -36,13 +36,14 @@ python -m http.server 8765
 | `src/lib/Editor.svelte` | CodeMirror 6 editor |
 | `src/lib/Console.svelte` | Compiler vs Runtime panes |
 | `src/lib/sample.capy.js` | Default Capylang sample |
+| `src/lib/compile/` | Worker + MemoryFS + easywasm compile path |
 | `spike/` | Phase 0 browser/Node compile proof |
-| `public/capylang.wasm` | Compiler asset (gitignored; copy from `build/`) |
+| `public/capylang.wasm` | Compiler asset (gitignored; copy from `../build/capylang.wasm`) |
 
 ## Phases
 
 0. Spike: `capylang.wasm` compiles in JS: done  
-1. Svelte skeleton + CodeMirror: current  
-2. Compile Worker  
+1. Svelte skeleton + CodeMirror: done  
+2. Compile Worker: current  
 3. easywasm CLI run  
 4. Polish + docs  
