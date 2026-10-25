@@ -14,6 +14,10 @@ Open the URL Vite prints (http://localhost:5173/).
 
 **Phase 2:** Run compiles Capylang in a Web Worker. Runtime execution comes in Phase 3.
 
+```bash
+npm test   # needs public/capylang.wasm
+```
+
 For the Phase 0 compile spike (headless):
 
 ```bash

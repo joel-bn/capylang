@@ -133,10 +133,14 @@ export async function compileCapylang(options) {
   // Plain import object: some bundlers break class-prototype WASM imports.
   const preview1 = bindWasiImports(wasi);
   const importObject = { wasi_snapshot_preview1: preview1 };
-  const { instance } =
-    options.compilerModule instanceof WebAssembly.Module
-      ? await WebAssembly.instantiate(options.compilerModule, importObject)
-      : await WebAssembly.instantiate(moduleBytes, importObject);
+
+  let instance;
+  if (options.compilerModule instanceof WebAssembly.Module) {
+    instance = await WebAssembly.instantiate(options.compilerModule, importObject);
+  } else {
+    const result = await WebAssembly.instantiate(moduleBytes, importObject);
+    instance = result.instance;
+  }
 
   let exitCode = 0;
   try {
