@@ -3,22 +3,20 @@
   import Console from "./lib/Console.svelte";
   import { SAMPLE_CAPY } from "./lib/sample.capy.js";
   import { compileSource } from "./lib/compile/compileClient.js";
+  import { runWasm } from "./lib/runtime/runWasm.js";
 
   let source = $state(SAMPLE_CAPY);
   let compilerLog = $state("");
   let runtimeLog = $state("");
   let status = $state("Ready");
   let busy = $state(false);
-  /** @type {Uint8Array | null} */
-  let lastWasm = $state(null);
 
   async function onRun() {
     if (busy) return;
     busy = true;
-    lastWasm = null;
-    runtimeLog = "(Phase 3: run not wired yet)";
-    compilerLog = "Compiling…\n(first run loads capylang.wasm, may take a few seconds)";
-    status = "Compiling…";
+    runtimeLog = "";
+    compilerLog = "Compiling...\n(first run loads capylang.wasm, may take a few seconds)";
+    status = "Compiling...";
 
     try {
       const result = await compileSource(source);
@@ -29,21 +27,40 @@
         result.stderr ? `stderr:\n${result.stderr}` : "stderr: (empty)",
       ];
 
-      if (result.ok && result.wasm) {
-        lastWasm = result.wasm;
-        const magic = [...result.wasm.slice(0, 4)]
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join(" ");
-        parts.push(`out.wasm size=${result.wasm.byteLength} magic=${magic}`);
+      if (!(result.ok && result.wasm)) {
         compilerLog = parts.join("\n\n");
-        status = `Compile OK (${result.wasm.byteLength} bytes, ${result.ms} ms)`;
-      } else {
-        compilerLog = parts.join("\n\n");
+        runtimeLog = "(skipped, compile failed)";
         status = `Compile failed (exit ${result.exitCode})`;
+        return;
       }
+
+      const magic = [...result.wasm.slice(0, 4)]
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(" ");
+      parts.push(`out.wasm size=${result.wasm.byteLength} magic=${magic}`);
+      compilerLog = parts.join("\n\n");
+      status = "Running...";
+      runtimeLog = "Starting WASI module...";
+
+      const run = await runWasm(result.wasm);
+      const runParts = [
+        `exitCode=${run.exitCode}`,
+        run.stdout ? `stdout:\n${run.stdout}` : "stdout: (empty)",
+        run.stderr ? `stderr:\n${run.stderr}` : "stderr: (empty)",
+      ];
+      runtimeLog = runParts.join("\n\n");
+      status = run.ok
+        ? `OK (compile ${result.ms} ms, exit ${run.exitCode})`
+        : `Runtime exit ${run.exitCode}`;
     } catch (err) {
-      compilerLog = String(err && err.stack ? err.stack : err);
-      status = "Compile error";
+      const text = err?.stack || String(err);
+      if (!compilerLog || compilerLog.startsWith("Compiling")) {
+        compilerLog = text;
+        status = "Compile error";
+      } else {
+        runtimeLog = text;
+        status = "Runtime error";
+      }
     } finally {
       busy = false;
     }
@@ -56,7 +73,7 @@
     <p class="tagline">Client-only Capylang</p>
     <div class="actions">
       <button type="button" onclick={onRun} disabled={busy}>
-        {busy ? "Compiling…" : "Run"}
+        {busy ? "Working..." : "Run"}
       </button>
       <span class="status">{status}</span>
     </div>

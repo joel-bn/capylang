@@ -12,7 +12,7 @@ npm run dev
 
 Open the URL Vite prints (http://localhost:5173/).
 
-**Phase 2:** Run compiles Capylang in a Web Worker. Runtime execution comes in Phase 3.
+**Phase 3:** Run compiles in a Web Worker, then executes the WASI module (CLI stdout/exit).
 
 ```bash
 npm test   # needs public/capylang.wasm
@@ -41,6 +41,8 @@ python -m http.server 8765
 | `src/lib/Console.svelte` | Compiler vs Runtime panes |
 | `src/lib/sample.capy.js` | Default Capylang sample |
 | `src/lib/compile/` | Worker + MemoryFS + easywasm compile path |
+| `src/lib/runtime/runWasm.js` | CLI run of generated WASI modules |
+| `tests/` | Node tests (`npm test`) |
 | `spike/` | Phase 0 browser/Node compile proof |
 | `public/capylang.wasm` | Compiler asset (gitignored; copy from `../build/capylang.wasm`) |
 
@@ -48,6 +50,6 @@ python -m http.server 8765
 
 0. Spike: `capylang.wasm` compiles in JS: done  
 1. Svelte skeleton + CodeMirror: done  
-2. Compile Worker: current  
-3. easywasm CLI run  
+2. Compile Worker: done  
+3. easywasm CLI run: current  
 4. Polish + docs  

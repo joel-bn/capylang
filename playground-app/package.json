@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "spike": "node spike/node_spike.mjs",
-    "test": "node --test src/lib/compile/compileCapylang.test.mjs"
+    "test": "node --test tests/*.test.mjs"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",

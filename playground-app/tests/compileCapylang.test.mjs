@@ -3,9 +3,9 @@ import { describe, it, before } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { compileCapylang } from "./compileCapylang.js";
+import { compileCapylang } from "../src/lib/compile/compileCapylang.js";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const wasmPath = join(root, "public", "capylang.wasm");
 
 const OK_SOURCE = `import wasi_snapshot_preview1::proc_exit(exit_code: u32) as proc_exit;
@@ -40,7 +40,6 @@ describe("compileCapylang", () => {
     assert.equal(result.exitCode, 0);
     assert.ok(result.wasm);
     assert.equal(result.wasm.byteLength > 0, true);
-    // \0asm
     assert.deepEqual([...result.wasm.slice(0, 4)], [0x00, 0x61, 0x73, 0x6d]);
   });
 
