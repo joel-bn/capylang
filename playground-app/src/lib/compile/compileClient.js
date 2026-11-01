@@ -3,6 +3,10 @@ let nextId = 1;
 /** @type {Map<number, { resolve: Function, reject: Function }>} */
 const pending = new Map();
 
+function abortError(message) {
+  return new DOMException(message, "AbortError");
+}
+
 function getWorker() {
   if (!worker) {
     worker = new Worker(new URL("./compile.worker.js", import.meta.url), {
@@ -28,6 +32,7 @@ function getWorker() {
         entry.reject(err);
       }
       pending.clear();
+      worker = null;
     };
   }
   return worker;
@@ -50,4 +55,16 @@ export function compileSource(source, options = {}) {
       compilerUrl: options.compilerUrl ?? `${window.location.origin}/capylang.wasm`,
     });
   });
+}
+
+/** Kill an in-flight compile worker (hangs, stuck first load). */
+export function cancelCompile() {
+  if (worker) {
+    worker.terminate();
+    worker = null;
+  }
+  for (const [, entry] of pending) {
+    entry.reject(abortError("Compile cancelled"));
+  }
+  pending.clear();
 }

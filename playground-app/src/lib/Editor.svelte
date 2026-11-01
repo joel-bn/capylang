@@ -53,8 +53,8 @@
 <style>
   .editor-host {
     height: 100%;
-    min-height: 280px;
-    overflow: auto;
+    min-height: 0;
+    overflow: hidden;
     border: 1px solid #ccc;
     background: #fafafa;
   }
@@ -65,6 +65,7 @@
   }
 
   .editor-host :global(.cm-scroller) {
+    overflow: auto;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
 </style>

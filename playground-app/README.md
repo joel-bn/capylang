@@ -6,13 +6,12 @@ Client-only Capylang playground (Svelte 5 + Vite).
 
 ```bash
 cd playground-app
+# once: copy ../build/capylang.wasm to public/capylang.wasm
 npm install
 npm run dev
 ```
 
-Open the URL Vite prints (http://localhost:5173/).
-
-**Phase 3:** Run compiles in a Web Worker, then executes the WASI module (CLI stdout/exit).
+Open the URL Vite prints (http://localhost:5173/). Click **Run**.
 
 ```bash
 npm test   # needs public/capylang.wasm
@@ -36,20 +35,20 @@ python -m http.server 8765
 
 | Path | Role |
 |---|---|
-| `src/App.svelte` | Layout, Run button, state |
-| `src/lib/Editor.svelte` | CodeMirror 6 editor |
+| `src/App.svelte` | Layout, Run flow |
+| `src/lib/Editor.svelte` | CodeMirror 6 |
 | `src/lib/Console.svelte` | Compiler vs Runtime panes |
-| `src/lib/sample.capy.js` | Default Capylang sample |
-| `src/lib/compile/` | Worker + MemoryFS + easywasm compile path |
-| `src/lib/runtime/runWasm.js` | CLI run of generated WASI modules |
-| `tests/` | Node tests (`npm test`) |
-| `spike/` | Phase 0 browser/Node compile proof |
-| `public/capylang.wasm` | Compiler asset (gitignored; copy from `../build/capylang.wasm`) |
+| `src/lib/sample.capy.js` | Default hello sample |
+| `src/lib/compile/` | Worker + MemoryFS + compiler |
+| `src/lib/runtime/runWasm.js` | WASI CLI run |
+| `tests/` | Node tests |
+| `spike/` | Early compile spike |
+| `public/capylang.wasm` | Compiler asset (gitignored) |
 
-## Phases
+## MVP status
 
 0. Spike: `capylang.wasm` compiles in JS: done  
 1. Svelte skeleton + CodeMirror: done  
 2. Compile Worker: done  
-3. easywasm CLI run: current  
-4. Polish + docs  
+3. easywasm CLI run: done  
+4. Polish: done

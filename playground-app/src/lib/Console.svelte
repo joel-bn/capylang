@@ -20,16 +20,18 @@
     grid-template-rows: 1fr 1fr;
     gap: 0.75rem;
     height: 100%;
-    min-height: 280px;
+    min-height: 0;
   }
 
   section {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    overflow: hidden;
   }
 
   h3 {
+    flex: 0 0 auto;
     margin: 0 0 0.35rem;
     font-size: 0.85rem;
     font-weight: 600;
@@ -40,6 +42,7 @@
 
   pre {
     flex: 1;
+    min-height: 0;
     margin: 0;
     padding: 0.75rem;
     overflow: auto;
