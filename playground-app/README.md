@@ -36,7 +36,8 @@ python -m http.server 8765
 | Path | Role |
 |---|---|
 | `src/App.svelte` | Layout, Run flow |
-| `src/lib/Editor.svelte` | CodeMirror 6 |
+| `src/lib/Editor.svelte` | CodeMirror 6 + Capylang StreamLanguage |
+| `src/lib/editor/capylangLanguage.js` | Capylang highlighting (keywords from lexer grammar) |
 | `src/lib/Console.svelte` | Compiler vs Runtime panes |
 | `src/lib/sample.capy.js` | Default hello sample |
 | `src/lib/compile/` | Worker + MemoryFS + compiler |

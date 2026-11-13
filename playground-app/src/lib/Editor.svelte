@@ -2,11 +2,12 @@
   import { onMount, onDestroy } from "svelte";
   import { EditorView, basicSetup } from "codemirror";
   import { EditorState } from "@codemirror/state";
-  import { javascript } from "@codemirror/lang-javascript";
+  import { capylang } from "./editor/capylangLanguage.js";
 
-  /** @type {string} */
+  /** @type {{ value?: string, onChange?: (text: string) => void }} */
   let { value = $bindable(""), onChange = undefined } = $props();
 
+  /** @type {HTMLDivElement | undefined} */
   let host;
   /** @type {EditorView | undefined} */
   let view;
@@ -16,7 +17,7 @@
       doc: value,
       extensions: [
         basicSetup,
-        javascript(),
+        capylang(),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             const next = update.state.doc.toString();
@@ -37,6 +38,7 @@
     return view ? view.state.doc.toString() : value;
   }
 
+  /** @param {string} text */
   export function setValue(text) {
     if (!view) {
       value = text;
