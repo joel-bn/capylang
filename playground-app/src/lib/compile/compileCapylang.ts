@@ -1,38 +1,55 @@
 import { WasiPreview1, WASIProcExit } from "./easywasm_wasi.js";
 import { MemoryFS } from "./memory_fs.js";
+import type { WasiFdEntry, WasiFdHandle } from "./wasiFd.js";
 
-function formatError(err) {
-  const name = err?.name || "Error";
-  const message = err?.message || String(err);
-  const stack = err?.stack ? `\n${err.stack}` : "";
+export type CompileCapylangOptions = {
+  source: string;
+  compilerUrl?: string | URL;
+  compilerModule?: WebAssembly.Module | Uint8Array | ArrayBuffer;
+};
+
+export type CompileCapylangResult = {
+  ok: boolean;
+  exitCode: number;
+  wasm: Uint8Array | null;
+  stdout: string;
+  stderr: string;
+};
+
+function formatError(err: unknown) {
+  const e = err as { name?: string; message?: string; stack?: string };
+  const name = e?.name || "Error";
+  const message = e?.message || String(err);
+  const stack = e?.stack ? `\n${e.stack}` : "";
   return `\n[${name}] ${message}${stack}\n`;
 }
 
 /** Prefer exit code over instanceof (bundlers can break instanceof across copies). */
-function extractExitCode(err) {
+function extractExitCode(err: unknown): number | null {
   if (err instanceof WASIProcExit) return err.code;
-  if (err && typeof err.code === "number" && /exit/i.test(String(err.message || ""))) {
-    return err.code;
+  const e = err as { code?: number; message?: string; name?: string };
+  if (e && typeof e.code === "number" && /exit/i.test(String(e.message || ""))) {
+    return e.code;
   }
-  if (err?.name === "WASIProcExit" && typeof err.code === "number") return err.code;
+  if (e?.name === "WASIProcExit" && typeof e.code === "number") return e.code;
   return null;
 }
 
 /** Bind WASI methods onto a plain object for reliable WebAssembly imports. */
-function bindWasiImports(wasi) {
-  const preview1 = {};
-  const proto = Object.getPrototypeOf(wasi);
+function bindWasiImports(wasi: object): WebAssembly.ModuleImports {
+  const preview1: WebAssembly.ModuleImports = {};
+  const proto = Object.getPrototypeOf(wasi) as object;
   for (const key of Object.getOwnPropertyNames(proto)) {
     if (key === "constructor") continue;
-    const value = wasi[key];
+    const value = (wasi as Record<string, unknown>)[key];
     if (typeof value === "function") {
-      preview1[key] = value.bind(wasi);
+      preview1[key] = (value as (...args: never[]) => unknown).bind(wasi);
     }
   }
   for (const key of Object.keys(wasi)) {
-    const value = wasi[key];
+    const value = (wasi as Record<string, unknown>)[key];
     if (typeof value === "function" && !preview1[key]) {
-      preview1[key] = value.bind(wasi);
+      preview1[key] = (value as (...args: never[]) => unknown).bind(wasi);
     }
   }
   return preview1;
@@ -42,18 +59,24 @@ function bindWasiImports(wasi) {
  * Patch easywasm file writes so chunked fd_write respects file position.
  * Upstream writeFileSync replaces the whole file per chunk.
  */
-function patchPositionalWrites(wasi, memfs) {
+function fileHandleOf(entry: WasiFdEntry | undefined): WasiFdHandle | undefined {
+  if (!entry || entry.type === "stdio") return undefined;
+  return entry.handle;
+}
+
+function patchPositionalWrites(wasi: WasiPreview1, memfs: MemoryFS) {
   const original = wasi.fd_write.bind(wasi);
   wasi.fd_write = (fd, iovs, iovsLen, nwrittenPtr) => {
-    const entry = wasi.fds.get(fd);
-    if (!entry || entry.type === "stdio") {
+    const entry = wasi.fds.get(fd) as WasiFdEntry | undefined;
+    const handle = fileHandleOf(entry);
+    if (!handle) {
       return original(fd, iovs, iovsLen, nwrittenPtr);
     }
 
     const view = new DataView(wasi.wasm.memory.buffer);
     const bytes = new Uint8Array(wasi.wasm.memory.buffer);
     let total = 0;
-    const chunks = [];
+    const chunks: Uint8Array[] = [];
     for (let i = 0; i < iovsLen; i++) {
       const base = iovs + 8 * i;
       const ptr = view.getUint32(base, true);
@@ -61,7 +84,7 @@ function patchPositionalWrites(wasi, memfs) {
       chunks.push(bytes.subarray(ptr, ptr + len));
       total += len;
     }
-    let payload;
+    let payload: Uint8Array;
     if (chunks.length === 1) {
       payload = chunks[0];
     } else {
@@ -73,23 +96,18 @@ function patchPositionalWrites(wasi, memfs) {
       }
     }
 
-    const path = entry.handle.path;
-    const offset = Number(entry.handle.position ?? 0);
+    const path = handle.path;
+    const offset = Number(handle.position ?? 0);
     memfs.writeAt(path, payload, offset);
-    entry.handle.position = offset + total;
+    handle.position = offset + total;
     view.setUint32(nwrittenPtr, total, true);
     return 0;
   };
 }
 
-/**
- * @param {object} options
- * @param {string} options.source
- * @param {string|URL} [options.compilerUrl]
- * @param {WebAssembly.Module|Uint8Array|ArrayBuffer} [options.compilerModule]
- * @returns {Promise<{ ok: boolean, exitCode: number, wasm: Uint8Array|null, stdout: string, stderr: string }>}
- */
-export async function compileCapylang(options) {
+export async function compileCapylang(
+  options: CompileCapylangOptions,
+): Promise<CompileCapylangResult> {
   const source = options.source;
   if (typeof source !== "string") {
     throw new Error("compileCapylang: source string required");
@@ -116,29 +134,30 @@ export async function compileCapylang(options) {
   };
   patchPositionalWrites(wasi, memfs);
 
-  let moduleBytes;
-  if (options.compilerModule instanceof WebAssembly.Module) {
-    moduleBytes = null;
-  } else if (options.compilerModule) {
-    moduleBytes = options.compilerModule;
-  } else {
-    const url = options.compilerUrl ?? "/capylang.wasm";
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch compiler: ${res.status} ${url}`);
-    }
-    moduleBytes = await res.arrayBuffer();
-  }
+  const importObject: WebAssembly.Imports = {
+    wasi_snapshot_preview1: bindWasiImports(wasi),
+  };
 
-  // Plain import object: some bundlers break class-prototype WASM imports.
-  const preview1 = bindWasiImports(wasi);
-  const importObject = { wasi_snapshot_preview1: preview1 };
-
-  let instance;
+  let instance: WebAssembly.Instance;
   if (options.compilerModule instanceof WebAssembly.Module) {
     instance = await WebAssembly.instantiate(options.compilerModule, importObject);
   } else {
-    const result = await WebAssembly.instantiate(moduleBytes, importObject);
+    let bytes: ArrayBuffer;
+    if (options.compilerModule) {
+      bytes = new Uint8Array(
+        options.compilerModule instanceof ArrayBuffer
+          ? new Uint8Array(options.compilerModule)
+          : options.compilerModule,
+      ).slice().buffer;
+    } else {
+      const url = options.compilerUrl ?? "/capylang.wasm";
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch compiler: ${res.status} ${url}`);
+      }
+      bytes = await res.arrayBuffer();
+    }
+    const result = await WebAssembly.instantiate(bytes, importObject);
     instance = result.instance;
   }
 
@@ -161,7 +180,7 @@ export async function compileCapylang(options) {
     }
   }
 
-  let wasm = null;
+  let wasm: Uint8Array | null = null;
   if (exitCode === 0) {
     try {
       wasm = memfs.readFileSync("/out.wasm");

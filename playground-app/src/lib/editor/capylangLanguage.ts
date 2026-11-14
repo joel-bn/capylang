@@ -1,10 +1,14 @@
 /**
- * Capylang CodeMirror language (StreamLanguage)
- * Keywords mirrored from grammar/CapylangLexerGrammar.g4, keep in sync on grammar changes.
+ * Capylang CodeMirror language (StreamLanguage).
+ * Keywords mirrored from grammar/CapylangLexerGrammar.g4; keep in sync on grammar changes.
  */
-import { LanguageSupport, StreamLanguage } from "@codemirror/language";
+import {
+  LanguageSupport,
+  StreamLanguage,
+  type StreamParser,
+  type StringStream,
+} from "@codemirror/language";
 
-/** @type {ReadonlySet<string>} */
 const KEYWORDS = new Set([
   "allocate",
   "break",
@@ -41,48 +45,40 @@ const TYPES = new Set([
 
 const NUMBER_SUFFIX = /^(u|s|f)(8|16|32|64)\b/;
 
-/**
- * @typedef {{ tokenize?: Function }} CapylangState
- */
+type TokenFn = (stream: StringStream, state: CapylangState) => string;
 
-/**
- * @param {import("@codemirror/language").StringStream} stream
- * @param {CapylangState} state
- */
-function tokenBase(stream, state) {
+type CapylangState = {
+  tokenize?: TokenFn;
+};
+
+function tokenBase(stream: StringStream, state: CapylangState): string | null {
   if (stream.eatSpace()) return null;
 
-  // Line comment
   if (stream.match("//")) {
     stream.skipToEnd();
     return "comment";
   }
 
-  // Blob string: b"..."
   if (stream.match(/^b"/)) {
     state.tokenize = tokenString('"');
     return state.tokenize(stream, state);
   }
 
-  // String
   if (stream.match('"')) {
     state.tokenize = tokenString('"');
     return state.tokenize(stream, state);
   }
 
-  // Char
   if (stream.match("'")) {
     state.tokenize = tokenString("'");
     return state.tokenize(stream, state);
   }
 
-  // Numbers (optional type suffix: 1u32)
   if (stream.match(/^\d+/)) {
     stream.match(NUMBER_SUFFIX);
     return "number";
   }
 
-  // Multi-char operators / punctuation first
   if (stream.match("->") || stream.match("::") || stream.match("||") || stream.match("&&")) {
     return "operator";
   }
@@ -97,16 +93,13 @@ function tokenBase(stream, state) {
     return "operator";
   }
 
-  // Single-char operators / punctuation
   const ch = stream.next();
   if (!ch) return null;
 
-  if ("@".includes(ch)) return "meta";
+  if (ch === "@") return "meta";
   if ("+-*/%<>=".includes(ch)) return "operator";
   if ("(){}[];,:.*".includes(ch)) return "punctuation";
 
-  // Identifier / keyword / type (put char back via match from previous)
-  // stream.next() already consumed; rebuild word
   if (/[a-zA-Z_$]/.test(ch)) {
     let word = ch;
     while (!stream.eol()) {
@@ -122,15 +115,7 @@ function tokenBase(stream, state) {
   return null;
 }
 
-/**
- * @param {string} quote
- * @returns {(stream: import("@codemirror/language").StringStream, state: CapylangState) => string}
- */
-function tokenString(quote) {
-  /**
-   * @param {import("@codemirror/language").StringStream} stream
-   * @param {CapylangState} state
-   */
+function tokenString(quote: string): TokenFn {
   return function (stream, state) {
     let escaped = false;
     while (!stream.eol()) {
@@ -152,15 +137,11 @@ function tokenString(quote) {
   };
 }
 
-const capylangStreamParser = {
+const capylangStreamParser: StreamParser<CapylangState> = {
   name: "capylang",
   startState() {
-    return /** @type {CapylangState} */ ({});
+    return {};
   },
-  /**
-   * @param {import("@codemirror/language").StringStream} stream
-   * @param {CapylangState} state
-   */
   token(stream, state) {
     if (state.tokenize) return state.tokenize(stream, state);
     return tokenBase(stream, state);
@@ -172,15 +153,10 @@ const capylangStreamParser = {
 
 export const capylangLanguage = StreamLanguage.define(capylangStreamParser);
 
-/**
- * Collect leaf highlight tokens for tests / debugging.
- * @param {string} text
- * @returns {{ name: string, text: string }[]}
- */
-export function tokenizeCapylang(text) {
+/** Collect leaf highlight tokens for tests / debugging. */
+export function tokenizeCapylang(text: string): { name: string; text: string }[] {
   const tree = capylangLanguage.parser.parse(text);
-  /** @type {{ name: string, text: string }[]} */
-  const out = [];
+  const out: { name: string; text: string }[] = [];
   tree.iterate({
     enter(node) {
       if (node.type.isTop) return;

@@ -1,18 +1,24 @@
-<script>
+<script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { EditorView, basicSetup } from "codemirror";
   import { EditorState } from "@codemirror/state";
-  import { capylang } from "./editor/capylangLanguage.js";
+  import { capylang } from "./editor/capylangLanguage";
 
-  /** @type {{ value?: string, onChange?: (text: string) => void }} */
-  let { value = $bindable(""), onChange = undefined } = $props();
+  let {
+    value = $bindable(""),
+    onChange = undefined,
+  }: {
+    value?: string;
+    onChange?: (text: string) => void;
+  } = $props();
 
-  /** @type {HTMLDivElement | undefined} */
-  let host;
-  /** @type {EditorView | undefined} */
-  let view;
+  let host: HTMLDivElement | undefined = $state();
+  let view: EditorView | undefined;
 
   onMount(() => {
+    if (!host) {
+      throw new Error("Editor host element missing");
+    }
     const state = EditorState.create({
       doc: value,
       extensions: [
@@ -38,8 +44,7 @@
     return view ? view.state.doc.toString() : value;
   }
 
-  /** @param {string} text */
-  export function setValue(text) {
+  export function setValue(text: string) {
     if (!view) {
       value = text;
       return;

@@ -1,12 +1,12 @@
 /**
- * Probe which examples/ *.capy files compile (and optionally run) with the current playground stack.
- * Usage: node tests/probe_examples.mjs
+ * Probe which examples/*.capy files compile (and optionally run) with the current playground stack.
+ * Usage: npm run probe
  */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { compileCapylang } from "../src/lib/compile/compileCapylang.js";
-import { runWasm } from "../src/lib/runtime/runWasm.js";
+import { compileCapylang } from "../src/lib/compile/compileCapylang";
+import { runWasm } from "../src/lib/runtime/runWasm";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = join(root, "..");
@@ -19,7 +19,9 @@ if (!existsSync(wasmPath)) {
 }
 
 const compilerBytes = readFileSync(wasmPath);
-const files = readdirSync(examplesDir).filter((f) => f.endsWith(".capy")).sort();
+const files = readdirSync(examplesDir)
+  .filter((f) => f.endsWith(".capy"))
+  .sort();
 
 for (const name of files) {
   const source = readFileSync(join(examplesDir, name), "utf8");
@@ -28,10 +30,10 @@ for (const name of files) {
   const hasEnv = /import\s+env::/.test(source);
 
   let compileOk = false;
-  let compileExit = null;
+  let compileExit: number | null = null;
   let compileErr = "";
-  let runOk = null;
-  let runExit = null;
+  let runOk: boolean | null = null;
+  let runExit: number | null = null;
   let runNote = "";
 
   try {
@@ -56,13 +58,13 @@ for (const name of files) {
           }
         } catch (e) {
           runOk = false;
-          runNote = String(e.message || e);
+          runNote = String(e instanceof Error ? e.message : e);
         }
       }
     }
   } catch (e) {
     compileOk = false;
-    compileErr = String(e.message || e);
+    compileErr = String(e instanceof Error ? e.message : e);
   }
 
   console.log(

@@ -1,6 +1,5 @@
-<script>
-  /** @type {{ compiler?: string, runtime?: string }} */
-  let { compiler = "", runtime = "" } = $props();
+<script lang="ts">
+  let { compiler = "", runtime = "" }: { compiler?: string; runtime?: string } = $props();
 </script>
 
 <div class="console">

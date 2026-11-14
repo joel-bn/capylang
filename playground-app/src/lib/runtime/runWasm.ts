@@ -1,0 +1,93 @@
+import { WasiPreview1, WASIProcExit } from "../compile/easywasm_wasi.js";
+
+export type RunWasmResult = {
+  ok: boolean;
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+};
+
+function formatError(err: unknown) {
+  const e = err as { name?: string; message?: string; stack?: string };
+  const name = e?.name || "Error";
+  const message = e?.message || String(err);
+  const stack = e?.stack ? `\n${e.stack}` : "";
+  return `[${name}] ${message}${stack}`;
+}
+
+function extractExitCode(err: unknown): number | null {
+  if (err instanceof WASIProcExit) return err.code;
+  const e = err as { code?: number; message?: string; name?: string };
+  if (e && typeof e.code === "number" && /exit/i.test(String(e.message || ""))) {
+    return e.code;
+  }
+  if (e?.name === "WASIProcExit" && typeof e.code === "number") return e.code;
+  return null;
+}
+
+function bindWasiImports(wasi: object): WebAssembly.ModuleImports {
+  const preview1: WebAssembly.ModuleImports = {};
+  const proto = Object.getPrototypeOf(wasi) as object;
+  for (const key of Object.getOwnPropertyNames(proto)) {
+    if (key === "constructor") continue;
+    const value = (wasi as Record<string, unknown>)[key];
+    if (typeof value === "function") {
+      preview1[key] = (value as (...args: never[]) => unknown).bind(wasi);
+    }
+  }
+  for (const key of Object.keys(wasi)) {
+    const value = (wasi as Record<string, unknown>)[key];
+    if (typeof value === "function" && !preview1[key]) {
+      preview1[key] = (value as (...args: never[]) => unknown).bind(wasi);
+    }
+  }
+  return preview1;
+}
+
+/** Run a Capylang-generated WASI module (CLI only). */
+export async function runWasm(wasmBytes: Uint8Array | ArrayBuffer): Promise<RunWasmResult> {
+  const bytes = wasmBytes instanceof Uint8Array ? wasmBytes : new Uint8Array(wasmBytes);
+
+  let stdout = "";
+  let stderr = "";
+  const decoder = new TextDecoder();
+
+  const wasi = new WasiPreview1({
+    args: ["program.wasm"],
+    env: {},
+  });
+  wasi.stdout = (buf: BufferSource) => {
+    stdout += decoder.decode(buf);
+  };
+  wasi.stderr = (buf: BufferSource) => {
+    stderr += decoder.decode(buf);
+  };
+
+  const importObject: WebAssembly.Imports = {
+    wasi_snapshot_preview1: bindWasiImports(wasi),
+  };
+  const { instance } = await WebAssembly.instantiate(
+    bytes as BufferSource,
+    importObject,
+  );
+
+  let exitCode = 0;
+  try {
+    exitCode = wasi.start(instance.exports);
+  } catch (err) {
+    const code = extractExitCode(err);
+    if (code !== null) {
+      exitCode = code;
+    } else {
+      stderr += (stderr ? "\n" : "") + formatError(err);
+      return { ok: false, exitCode: 1, stdout, stderr };
+    }
+  }
+
+  return {
+    ok: exitCode === 0,
+    exitCode,
+    stdout,
+    stderr,
+  };
+}

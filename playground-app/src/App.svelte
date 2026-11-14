@@ -1,9 +1,11 @@
-<script>
+<script lang="ts">
   import Editor from "./lib/Editor.svelte";
   import Console from "./lib/Console.svelte";
-  import { SAMPLE_CAPY } from "./lib/sample.capy.js";
-  import { compileSource, cancelCompile } from "./lib/compile/compileClient.js";
-  import { runWasmAsync, cancelRun } from "./lib/runtime/runClient.js";
+  import { SAMPLE_CAPY } from "./lib/sample.capy";
+  import { compileSource, cancelCompile } from "./lib/compile/compileClient";
+  import { runWasmAsync, cancelRun } from "./lib/runtime/runClient";
+
+  type Phase = "idle" | "compile" | "run";
 
   let source = $state(SAMPLE_CAPY);
   let compilerLog = $state("");
@@ -11,10 +13,24 @@
   let status = $state("Ready");
   let busy = $state(false);
   let busyLabel = $state("Run");
-  let phase = $state(/** @type {"idle" | "compile" | "run"} */ ("idle"));
+  let phase = $state<Phase>("idle");
 
-  function isAbort(err) {
-    return err?.name === "AbortError";
+  function isAbort(err: unknown) {
+    return err instanceof DOMException
+      ? err.name === "AbortError"
+      : typeof err === "object" &&
+          err !== null &&
+          "name" in err &&
+          (err as { name?: string }).name === "AbortError";
+  }
+
+  function formatCaught(err: unknown): string {
+    if (err instanceof Error && err.stack) return err.stack;
+    if (typeof err === "object" && err !== null && "stack" in err) {
+      const stack = (err as { stack?: unknown }).stack;
+      if (typeof stack === "string" && stack) return stack;
+    }
+    return String(err);
   }
 
   function onStop() {
@@ -84,7 +100,7 @@
         : `Runtime exit ${run.exitCode}`;
     } catch (err) {
       if (isAbort(err) || !busy) return;
-      const text = err?.stack || String(err);
+      const text = formatCaught(err);
       if (phase === "compile") {
         compilerLog = text;
         status = "Compile error";

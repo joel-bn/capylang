@@ -1,6 +1,6 @@
 # Capylang Playground App
 
-Client-only Capylang playground (Svelte 5 + Vite).
+Client-only Capylang playground (Svelte 5 + Vite + TypeScript).
 
 ## Quick start
 
@@ -14,7 +14,10 @@ npm run dev
 Open the URL Vite prints (http://localhost:5173/). Click **Run**.
 
 ```bash
-npm test   # needs public/capylang.wasm
+npm test         # Vitest; needs public/capylang.wasm
+npm run test:watch
+npm run check
+npm run probe    # scan ../examples/*.capy
 ```
 
 For the Phase 0 compile spike (headless):
@@ -37,11 +40,11 @@ python -m http.server 8765
 |---|---|
 | `src/App.svelte` | Layout, Run flow |
 | `src/lib/Editor.svelte` | CodeMirror 6 + Capylang StreamLanguage |
-| `src/lib/editor/capylangLanguage.js` | Capylang highlighting (keywords from lexer grammar) |
+| `src/lib/editor/capylangLanguage.ts` | Capylang highlighting (keywords from lexer grammar) |
 | `src/lib/Console.svelte` | Compiler vs Runtime panes |
-| `src/lib/sample.capy.js` | Default hello sample |
+| `src/lib/sample.capy.ts` | Default hello sample |
 | `src/lib/compile/` | Worker + MemoryFS + compiler |
-| `src/lib/runtime/runWasm.js` | WASI CLI run |
+| `src/lib/runtime/runWasm.ts` | WASI CLI run |
 | `tests/` | Node tests |
 | `spike/` | Early compile spike |
 | `public/capylang.wasm` | Compiler asset (gitignored) |
