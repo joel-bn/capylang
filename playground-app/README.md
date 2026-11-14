@@ -41,10 +41,11 @@ python -m http.server 8765
 | `src/App.svelte` | Layout, Run flow |
 | `src/lib/Editor.svelte` | CodeMirror 6 + Capylang StreamLanguage |
 | `src/lib/editor/capylangLanguage.ts` | Capylang highlighting (keywords from lexer grammar) |
-| `src/lib/Console.svelte` | Compiler vs Runtime panes |
+| `src/lib/Console.svelte` | output (Stdout / Compiler / Runtime sections) |
 | `src/lib/sample.capy.ts` | Default hello sample |
 | `src/lib/compile/` | Worker + MemoryFS + compiler |
-| `src/lib/runtime/runWasm.ts` | WASI CLI run |
+| `src/lib/runtime/` | WASI CLI run, trap formatting, name-section lookup |
+| `src/lib/wasiHelpers.ts` | Shared WASI import binding / exit-code extract |
 | `tests/` | Node tests |
 | `spike/` | Early compile spike |
 | `public/capylang.wasm` | Compiler asset (gitignored) |

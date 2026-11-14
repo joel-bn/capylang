@@ -1,5 +1,6 @@
-import { runWasm } from "./runWasm";
+import { formatRuntimeError } from "./formatRuntimeError";
 import { type RunResponse, parseRunRequest } from "./runMessages";
+import { runWasm } from "./runWasm";
 
 type WorkerScope = {
   onmessage: ((ev: MessageEvent) => void) | null;
@@ -25,17 +26,13 @@ workerSelf.onmessage = async (event: MessageEvent) => {
     };
     workerSelf.postMessage(response);
   } catch (err) {
-    const e = err as { name?: string; message?: string; stack?: string };
-    const name = e?.name || "Error";
-    const message = e?.message || String(err);
-    const stack = e?.stack || "";
     const response: RunResponse = {
       type: "result",
       id,
       ok: false,
       exitCode: 1,
       stdout: "",
-      stderr: `[${name}] ${message}\n${stack}`,
+      stderr: formatRuntimeError(err),
     };
     workerSelf.postMessage(response);
   }

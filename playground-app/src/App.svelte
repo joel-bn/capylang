@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import Editor from "./lib/Editor.svelte";
   import Console from "./lib/Console.svelte";
   import { SAMPLE_CAPY } from "./lib/sample.capy";
@@ -7,13 +8,33 @@
 
   type Phase = "idle" | "compile" | "run";
 
+  const OUTPUT_MIN = 15;
+  const OUTPUT_MAX = 70;
+  const SIDE_BY_SIDE_MQ = "(min-width: 1200px)";
+
   let source = $state(SAMPLE_CAPY);
+  let stdoutLog = $state("");
   let compilerLog = $state("");
   let runtimeLog = $state("");
   let status = $state("Ready");
   let busy = $state(false);
   let busyLabel = $state("Run");
   let phase = $state<Phase>("idle");
+  let outputOpen = $state(true);
+  let outputSharePercent = $state(32);
+  let sideBySide = $state(false);
+  let workspaceEl: HTMLDivElement | undefined = $state();
+  let resizing = $state(false);
+
+  onMount(() => {
+    const mq = window.matchMedia(SIDE_BY_SIDE_MQ);
+    const sync = () => {
+      sideBySide = mq.matches;
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  });
 
   function isAbort(err: unknown) {
     return err instanceof DOMException
@@ -25,27 +46,79 @@
   }
 
   function formatCaught(err: unknown): string {
-    if (err instanceof Error && err.stack) return err.stack;
-    if (typeof err === "object" && err !== null && "stack" in err) {
-      const stack = (err as { stack?: unknown }).stack;
-      if (typeof stack === "string" && stack) return stack;
+    const e = err as { name?: string; message?: string };
+    const name = e?.name || "Error";
+    const message = (e?.message || String(err)).trim() || name;
+    return `[${name}] ${message}`;
+  }
+
+  function clearOutput() {
+    stdoutLog = "";
+    compilerLog = "";
+    runtimeLog = "";
+  }
+
+  function closeOutput() {
+    outputOpen = false;
+  }
+
+  function openOutput() {
+    outputOpen = true;
+  }
+
+  function clampoutputSharePercent(value: number) {
+    return Math.min(OUTPUT_MAX, Math.max(OUTPUT_MIN, value));
+  }
+
+  function onResizePointerDown(event: PointerEvent) {
+    if (!workspaceEl || event.button !== 0) return;
+    event.preventDefault();
+    const handle = event.currentTarget as HTMLElement;
+    handle.setPointerCapture(event.pointerId);
+    resizing = true;
+
+    const startPos = sideBySide ? event.clientX : event.clientY;
+    const startPct = outputSharePercent;
+    const total = sideBySide
+      ? workspaceEl.getBoundingClientRect().width
+      : workspaceEl.getBoundingClientRect().height;
+
+    function onMove(ev: PointerEvent) {
+      if (total <= 0) return;
+      const pos = sideBySide ? ev.clientX : ev.clientY;
+      // Dragging the divider toward the editor grows output.
+      outputSharePercent = clampoutputSharePercent(startPct + ((startPos - pos) / total) * 100);
     }
-    return String(err);
+
+    function onUp(ev: PointerEvent) {
+      handle.releasePointerCapture(ev.pointerId);
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("pointercancel", onUp);
+      resizing = false;
+    }
+
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onUp);
   }
 
   function onStop() {
     if (!busy) return;
+    const stoppedPhase = phase;
     cancelCompile();
     cancelRun();
     busy = false;
     busyLabel = "Run";
     phase = "idle";
     status = "Stopped";
-    if (compilerLog.startsWith("Compiling")) {
+    outputOpen = true;
+    if (stoppedPhase === "compile" || compilerLog.startsWith("Compiling")) {
       compilerLog = "(cancelled)";
-    }
-    if (runtimeLog === "Starting WASI module..." || runtimeLog === "") {
-      runtimeLog = "(cancelled)";
+      runtimeLog = "";
+      stdoutLog = "";
+    } else {
+      runtimeLog = runtimeLog || "(cancelled)";
     }
   }
 
@@ -54,55 +127,57 @@
     busy = true;
     busyLabel = "Compiling...";
     phase = "compile";
-    runtimeLog = "";
-    compilerLog = "Compiling...\n(first run loads capylang.wasm, may take a few seconds)";
-    status = "Compiling...";
+    outputOpen = true;
+    clearOutput();
+    compilerLog = "Compiling…\n(first run loads capylang.wasm, may take a few seconds)";
+    status = "Compiling…";
 
     try {
       const result = await compileSource(source);
       if (!busy) return;
 
-      const parts = [
-        `exitCode=${result.exitCode}`,
-        `time=${result.ms} ms`,
-        result.stdout ? `stdout:\n${result.stdout}` : "stdout: (empty)",
-        result.stderr ? `stderr:\n${result.stderr}` : "stderr: (empty)",
-      ];
-
       if (!(result.ok && result.wasm)) {
-        compilerLog = parts.join("\n\n");
-        runtimeLog = "(skipped, compile failed)";
-        status = `Compile failed (exit ${result.exitCode})`;
+        const bits = [
+          result.stderr.trim() || "(no compiler stderr)",
+          result.stdout.trim() ? `stdout:\n${result.stdout.trim()}` : "",
+        ].filter(Boolean);
+        compilerLog = bits.join("\n\n");
+        stdoutLog = "";
+        runtimeLog = "";
+        status = `Compile failed (exit ${result.exitCode}, ${result.ms} ms)`;
         return;
       }
 
-      const magic = [...result.wasm.slice(0, 4)]
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join(" ");
-      parts.push(`out.wasm size=${result.wasm.byteLength} magic=${magic}`);
-      compilerLog = parts.join("\n\n");
+      compilerLog = result.stderr.trim();
       busyLabel = "Running...";
       phase = "run";
-      status = "Running...";
-      runtimeLog = "Starting WASI module...";
+      status = "Running…";
+      runtimeLog = "";
 
       const run = await runWasmAsync(result.wasm);
       if (!busy) return;
 
-      const runParts = [
-        `exitCode=${run.exitCode}`,
-        run.stdout ? `stdout:\n${run.stdout}` : "stdout: (empty)",
-        run.stderr ? `stderr:\n${run.stderr}` : "stderr: (empty)",
-      ];
-      runtimeLog = runParts.join("\n\n");
-      status = run.ok
-        ? `OK (compile ${result.ms} ms, exit ${run.exitCode})`
-        : `Runtime exit ${run.exitCode}`;
+      const out = run.stdout.trimEnd();
+      const err = run.stderr.trim();
+
+      if (run.ok) {
+        stdoutLog = out.length > 0 ? out : "(no output)";
+        runtimeLog = "";
+        status = `OK (compile ${result.ms} ms, exit ${run.exitCode})`;
+      } else {
+        stdoutLog = out;
+        runtimeLog = err || `exit ${run.exitCode}`;
+        status = err.includes("trap:")
+          ? "Runtime trap"
+          : `Runtime exit ${run.exitCode}`;
+      }
     } catch (err) {
       if (isAbort(err) || !busy) return;
       const text = formatCaught(err);
       if (phase === "compile") {
         compilerLog = text;
+        stdoutLog = "";
+        runtimeLog = "";
         status = "Compile error";
       } else {
         runtimeLog = text;
@@ -120,32 +195,55 @@
 
 <main>
   <header>
-    <h1>Capy Playground</h1>
-    <p class="tagline">Client-only Capylang</p>
+    <div class="brand">Capy-Playground</div>
     <div class="actions">
-      <button type="button" onclick={onRun} disabled={busy}>
+      <button type="button" class="run" onclick={onRun} disabled={busy}>
         {busyLabel}
       </button>
       <button type="button" class="stop" onclick={onStop} disabled={!busy}>
         Stop
       </button>
-      <span class="status">{status}</span>
+      {#if !outputOpen}
+        <button type="button" class="show-output" onclick={openOutput}>
+          Show Output
+        </button>
+      {/if}
     </div>
   </header>
 
-  <div class="panes">
-    <section class="pane">
-      <h2>Editor</h2>
-      <div class="pane-body">
-        <Editor bind:value={source} />
-      </div>
+  <div
+    class="workspace"
+    class:output-open={outputOpen}
+    class:side-by-side={sideBySide && outputOpen}
+    class:resizing
+    bind:this={workspaceEl}
+    style="--output-pct: {outputSharePercent}%"
+  >
+    <section class="editor-pane" aria-label="Editor">
+      <Editor bind:value={source} />
     </section>
-    <section class="pane">
-      <h2>Output</h2>
-      <div class="pane-body">
-        <Console compiler={compilerLog} runtime={runtimeLog} />
-      </div>
-    </section>
+
+    {#if outputOpen}
+      <div
+        class="resize-handle"
+        role="separator"
+        aria-orientation={sideBySide ? "vertical" : "horizontal"}
+        aria-label="Resize output"
+        aria-valuemin={OUTPUT_MIN}
+        aria-valuemax={OUTPUT_MAX}
+        aria-valuenow={Math.round(outputSharePercent)}
+        onpointerdown={onResizePointerDown}
+      ></div>
+      <section class="output-pane" aria-label="Output">
+        <Console
+          status={status}
+          stdout={stdoutLog}
+          compiler={compilerLog}
+          runtime={runtimeLog}
+          onClose={closeOutput}
+        />
+      </section>
+    {/if}
   </div>
 </main>
 
@@ -160,7 +258,6 @@
     height: 100%;
     display: flex;
     flex-direction: column;
-    padding: 1rem 1.25rem 1.5rem;
     font-family: system-ui, sans-serif;
     color: #1a1a1a;
     background: #f4f4f5;
@@ -169,29 +266,32 @@
 
   header {
     flex: 0 0 auto;
-    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    min-height: 2.75rem;
+    padding: 0.4rem 0.85rem;
+    border-bottom: 1px solid #d4d4d8;
+    background: #fff;
   }
 
-  h1 {
-    margin: 0;
-    font-size: 1.4rem;
-  }
-
-  .tagline {
-    margin: 0.25rem 0 0.75rem;
-    color: #666;
-    font-size: 0.95rem;
+  .brand {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
   }
 
   .actions {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1;
   }
 
   button {
     font: inherit;
-    padding: 0.45rem 1rem;
+    padding: 0.35rem 0.85rem;
     border: 1px solid #333;
     border-radius: 4px;
     background: #222;
@@ -208,52 +308,76 @@
     cursor: not-allowed;
   }
 
-  button.stop {
+  button.run {
+    font-weight: 600;
+  }
+
+  button.stop,
+  button.show-output {
     background: #fff;
     color: #222;
     border-color: #888;
   }
 
-  button.stop:hover:not(:disabled) {
+  button.stop:hover:not(:disabled),
+  button.show-output:hover:not(:disabled) {
     background: #eee;
   }
 
-  .status {
-    font-size: 0.9rem;
-    color: #555;
+  .show-output {
+    margin-left: auto;
   }
 
-  .panes {
+  .workspace {
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
   }
 
-  .pane {
-    display: flex;
-    flex-direction: column;
+  .workspace.output-open {
+    grid-template-rows: 1fr 6px minmax(6rem, var(--output-pct, 32%));
+  }
+
+  .workspace.output-open.side-by-side {
+    grid-template-columns: 1fr 6px minmax(14rem, var(--output-pct, 32%));
+    grid-template-rows: 1fr;
+  }
+
+  .workspace.resizing {
+    user-select: none;
+    cursor: inherit;
+  }
+
+  .editor-pane {
+    min-width: 0;
     min-height: 0;
     overflow: hidden;
   }
 
-  .pane h2 {
-    flex: 0 0 auto;
-    margin: 0 0 0.5rem;
-    font-size: 0.95rem;
+  .resize-handle {
+    touch-action: none;
+    background: #d4d4d8;
+    transition: background 0.12s ease;
   }
 
-  .pane-body {
-    flex: 1;
+  .workspace.output-open:not(.side-by-side) .resize-handle {
+    cursor: row-resize;
+  }
+
+  .workspace.output-open.side-by-side .resize-handle {
+    cursor: col-resize;
+  }
+
+  .resize-handle:hover,
+  .workspace.resizing .resize-handle {
+    background: #a1a1aa;
+  }
+
+  .output-pane {
+    min-width: 0;
     min-height: 0;
     overflow: hidden;
-  }
-
-  @media (max-width: 800px) {
-    .panes {
-      grid-template-columns: 1fr;
-      grid-template-rows: 1fr 1fr;
-    }
   }
 </style>
