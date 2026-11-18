@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-docs:
     runs-on: ubuntu-latest
 
     steps:
@@ -35,11 +35,83 @@ jobs:
       - name: Install documentation dependencies
         run: uv sync --frozen --group docs
 
+      - name: Build documentation
+        run: uv run mkdocs build --strict
+
+      - name: Upload docs site
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-site
+          path: site
+
+  build-playground:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup WASI toolchain and wasm tools
+        uses: ./.github/actions/setup-wasm-toolchain
+        with:
+          wasi-version: "29"
+
+      - name: Configure Capylang compiler
+        run: cmake -S . -B build -G Ninja --toolchain cmake/wasm-wasip-clang.cmake
+
+      - name: Build capylang.wasm
+        run: cmake --build build --target capylang
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: playground-app/package-lock.json
+
+      - name: Install playground dependencies
+        working-directory: playground-app
+        run: npm ci
+
+      - name: Stage compiler wasm for Vite public/
+        run: cp build/capylang.wasm playground-app/public/capylang.wasm
+
+      - name: Build playground (GitHub Pages base)
+        working-directory: playground-app
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/playground/
+        run: npm run build
+
+      - name: Upload playground dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: playground-dist
+          path: playground-app/dist
+
+  package-pages:
+    needs: [build-docs, build-playground]
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Build documentation
-        run: uv run mkdocs build --strict
+      - name: Download docs site
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-site
+          path: site
+
+      - name: Download playground dist
+        uses: actions/download-artifact@v4
+        with:
+          name: playground-dist
+          path: playground-dist
+
+      - name: Nest playground under site/playground
+        run: |
+          mkdir -p site/playground
+          cp -a playground-dist/. site/playground/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -48,7 +120,7 @@ jobs:
 
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
+    needs: package-pages
     runs-on: ubuntu-latest
     environment:
       name: github-pages

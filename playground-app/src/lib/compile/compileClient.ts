@@ -75,7 +75,10 @@ export function compileSource(
     type: "compile",
     id,
     source,
-    compilerUrl: options.compilerUrl ?? `${window.location.origin}/capylang.wasm`,
+    compilerUrl:
+      options.compilerUrl ??
+      new URL("capylang.wasm", new URL(import.meta.env.BASE_URL, window.location.href))
+        .href,
   };
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });

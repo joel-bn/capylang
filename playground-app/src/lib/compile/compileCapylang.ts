@@ -120,7 +120,7 @@ export async function compileCapylang(
           : options.compilerModule,
       ).slice().buffer;
     } else {
-      const url = options.compilerUrl ?? "/capylang.wasm";
+      const url = options.compilerUrl ?? `${import.meta.env.BASE_URL}capylang.wasm`;
       const res = await fetch(url);
       if (!res.ok) {
         throw new Error(`Failed to fetch compiler: ${res.status} ${url}`);

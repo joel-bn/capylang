@@ -50,10 +50,20 @@ python -m http.server 8765
 | `spike/` | Early compile spike |
 | `public/capylang.wasm` | Compiler asset (gitignored) |
 
-## MVP status
+## GitHub Pages
 
-0. Spike: `capylang.wasm` compiles in JS: done  
-1. Svelte skeleton + CodeMirror: done  
-2. Compile Worker: done  
-3. easywasm CLI run: done  
-4. Polish: done
+CI (`.github/workflows/docs.yml`) builds MkDocs plus this app and deploys:
+
+- Docs: `https://<user>.github.io/<repo>/`
+- Playground: `https://<user>.github.io/<repo>/playground/`
+
+Local production build with the same base (repo name `wipro` example):
+
+```bash
+# needs public/capylang.wasm
+VITE_BASE=/wipro/playground/ npm run build
+npm run preview
+```
+
+Deploy happens on push to `main` (and via `workflow_dispatch`).
+
