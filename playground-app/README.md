@@ -65,5 +65,3 @@ VITE_BASE=/wipro/playground/ npm run build
 npm run preview
 ```
 
-Deploy happens on push to `main` (and via `workflow_dispatch`). Test Workflow via push to main
-

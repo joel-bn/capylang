@@ -60,4 +60,21 @@ describe("compileCapylang", () => {
     expect(result.wasm).toBeTruthy();
     expect([...result.wasm!.slice(0, 4)]).toEqual([0x00, 0x61, 0x73, 0x6d]);
   });
+
+  it("resolves include \"/lib/wasi.capy\" from the virtual FS", async () => {
+    const INCLUDE_SOURCE = `include "/lib/wasi.capy"
+
+@export
+fn _start() {
+    proc_exit(0u32);
+}
+`;
+    const result = await compileCapylang({
+      source: INCLUDE_SOURCE,
+      compilerModule: compilerBytes,
+    });
+    expect(result.stderr).not.toMatch(/Could not open include file/i);
+    expect(result.ok).toBe(true);
+    expect(result.wasm).toBeTruthy();
+  });
 });

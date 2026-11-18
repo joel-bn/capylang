@@ -1,7 +1,8 @@
+import { bindWasiImports, extractExitCode } from "../wasiHelpers.js";
 import { WasiPreview1 } from "./easywasm_wasi.js";
 import { MemoryFS } from "./memory_fs.js";
+import { seedCapylangIncludes } from "./seedCapylangIncludes.js";
 import type { WasiFdEntry, WasiFdHandle } from "./wasiFd.js";
-import { bindWasiImports, extractExitCode } from "../wasiHelpers.js";
 
 export type CompileCapylangOptions = {
   source: string;
@@ -84,6 +85,7 @@ export async function compileCapylang(
   }
 
   const memfs = new MemoryFS();
+  seedCapylangIncludes((path, data) => memfs.writeFileSync(path, data));
   memfs.writeFileSync("/in.capy", source);
   memfs.writeFileSync("/out.wasm", new Uint8Array(0));
 
