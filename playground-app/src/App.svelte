@@ -16,7 +16,8 @@
   let stdoutLog = $state("");
   let compilerLog = $state("");
   let runtimeLog = $state("");
-  let status = $state("Ready");
+  let compileStatus = $state("");
+  let runtimeStatus = $state("");
   let busy = $state(false);
   let busyLabel = $state("Run");
   let phase = $state<Phase>("idle");
@@ -56,7 +57,18 @@
     stdoutLog = "";
     compilerLog = "";
     runtimeLog = "";
+    compileStatus = "";
+    runtimeStatus = "";
   }
+
+  const statusText = $derived(
+    [
+      compileStatus ? `compile: ${compileStatus}` : "",
+      runtimeStatus ? `runtime: ${runtimeStatus}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
 
   function closeOutput() {
     outputOpen = false;
@@ -111,13 +123,15 @@
     busy = false;
     busyLabel = "Run";
     phase = "idle";
-    status = "Stopped";
     outputOpen = true;
     if (stoppedPhase === "compile" || compilerLog.startsWith("Compiling")) {
+      compileStatus = "cancelled";
+      runtimeStatus = "";
       compilerLog = "(cancelled)";
       runtimeLog = "";
       stdoutLog = "";
     } else {
+      runtimeStatus = "cancelled";
       runtimeLog = runtimeLog || "(cancelled)";
     }
   }
@@ -129,8 +143,8 @@
     phase = "compile";
     outputOpen = true;
     clearOutput();
+    compileStatus = "…";
     compilerLog = "Compiling…\n(first run loads capylang.wasm, may take a few seconds)";
-    status = "Compiling…";
 
     try {
       const result = await compileSource(source);
@@ -144,14 +158,16 @@
         compilerLog = bits.join("\n\n");
         stdoutLog = "";
         runtimeLog = "";
-        status = `Compile failed (exit ${result.exitCode}, ${result.ms} ms)`;
+        compileStatus = `failed (exit ${result.exitCode}, ${result.ms} ms)`;
+        runtimeStatus = "skipped";
         return;
       }
 
+      compileStatus = `OK (${result.ms} ms)`;
       compilerLog = result.stderr.trim();
       busyLabel = "Running...";
       phase = "run";
-      status = "Running…";
+      runtimeStatus = "…";
       runtimeLog = "";
 
       const run = await runWasmAsync(result.wasm);
@@ -163,13 +179,13 @@
       if (run.ok) {
         stdoutLog = out.length > 0 ? out : "(no output)";
         runtimeLog = "";
-        status = `OK (compile ${result.ms} ms, exit ${run.exitCode})`;
+        runtimeStatus = `OK (exit ${run.exitCode})`;
       } else {
         stdoutLog = out;
         runtimeLog = err || `exit ${run.exitCode}`;
-        status = err.includes("trap:")
-          ? "Runtime trap"
-          : `Runtime exit ${run.exitCode}`;
+        runtimeStatus = err.includes("trap:")
+          ? "trap"
+          : `failed (exit ${run.exitCode})`;
       }
     } catch (err) {
       if (isAbort(err) || !busy) return;
@@ -178,10 +194,11 @@
         compilerLog = text;
         stdoutLog = "";
         runtimeLog = "";
-        status = "Compile error";
+        compileStatus = "error";
+        runtimeStatus = "skipped";
       } else {
         runtimeLog = text;
-        status = "Runtime error";
+        runtimeStatus = "error";
       }
     } finally {
       if (busy) {
@@ -236,7 +253,7 @@
       ></div>
       <section class="output-pane" aria-label="Output">
         <Console
-          status={status}
+          status={statusText}
           stdout={stdoutLog}
           compiler={compilerLog}
           runtime={runtimeLog}

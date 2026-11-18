@@ -13,7 +13,7 @@
     onClose?: () => void;
   } = $props();
 
-  const hasStatus = $derived(status.trim().length > 0 && status.trim() !== "Ready");
+  const hasStatus = $derived(status.trim().length > 0);
   const hasStdout = $derived(stdout.trim().length > 0);
   const hasCompiler = $derived(compiler.trim().length > 0);
   const hasRuntime = $derived(runtime.trim().length > 0);
