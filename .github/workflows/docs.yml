@@ -74,7 +74,9 @@ jobs:
         run: npm ci
 
       - name: Stage compiler wasm for Vite public/
-        run: cp build/capylang.wasm playground-app/public/capylang.wasm
+        run: |
+          mkdir -p playground-app/public
+          cp build/capylang.wasm playground-app/public/capylang.wasm
 
       - name: Build playground (GitHub Pages base)
         working-directory: playground-app
