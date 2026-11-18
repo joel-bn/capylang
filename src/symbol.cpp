@@ -238,23 +238,26 @@ std::optional<type_id> context::derefed_type(type_id pointer_type_idx) const
     return std::nullopt;
 }
 
-std::optional<type_id> context::record_field_type(type_id record_type_idx, const std::string& field_name)
+std::optional<record_type::indexed_field> context::record_field_entry(type_id record_type_idx, const std::string& field_name)
 {
     auto t = types[to_index(record_type_idx)];
     if (!std::holds_alternative<type_kind>(t))
         return std::nullopt;
 
     auto kind = std::get<type_kind>(t);
-    if (std::holds_alternative<record_type>(kind))
+    if (!std::holds_alternative<record_type>(kind))
+        return std::nullopt;
+
+    const record_type& r = std::get<record_type>(kind);
+
+    size_t field_index = 0;
+    for (const auto& field : r.fields)
     {
-        const record_type& r = std::get<record_type>(kind);
-        for (const auto& field : r.fields)
+        if (field.first == field_name)
         {
-            if (field.first == field_name)
-            {
-                return field.second;
-            }
+            return record_type::indexed_field{field_index, field.second};
         }
+        field_index++;
     }
 
     return std::nullopt;
@@ -324,6 +327,10 @@ std::string context::repr(type_id type_idx) const
                                     return "s16";
                                 case primitive_type::S32:
                                     return "s32";
+                                case primitive_type::U64:
+                                    return "u64";
+                                case primitive_type::S64:
+                                    return "s64";
                             }
                         }
                         else if constexpr (std::is_same_v<K, pointer_type>)
